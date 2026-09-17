@@ -20,10 +20,6 @@ export interface ReadingInput {
   evidence_id?: string | null
   reading_at: string
   extracted_value?: number | null
-  corrected_value?: number | null
-  official_value?: number | null
-  validation_status?: 'proposed' | 'validated' | 'rejected' | 'corrected'
-  validation_reason?: string | null
   operation_id?: string
 }
 
@@ -85,7 +81,17 @@ export const mizanService = {
   },
 
   async createReading(input: ReadingInput): Promise<MeterReading> {
-    const payload = { ...input, created_by: await requireUserId(), operation_id: input.operation_id ?? operationId() }
+    const userId = await requireUserId()
+    const payload = {
+      project_id: input.project_id,
+      meter_id: input.meter_id,
+      evidence_id: input.evidence_id ?? null,
+      reading_at: input.reading_at,
+      extracted_value: input.extracted_value ?? null,
+      validation_status: 'proposed' as const,
+      created_by: userId,
+      operation_id: input.operation_id ?? operationId(),
+    }
     const { data, error } = await supabase.from('meter_readings').insert(payload).select().single()
     if (error) throw error
     return { ...data, reading_date: data.reading_at } as MeterReading
