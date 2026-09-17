@@ -90,11 +90,12 @@ export default function App() {
   async function createReading() {
     const parsed = parseAndValidateReadingValue(extractedValue)
     if (parsed.error || parsed.value === null) { setMessage(parsed.error ?? 'قيمة القراءة مطلوبة.'); return }
+    const extracted = parsed.value
     await run(async () => {
       const created = await mizanService.createReading({
         project_id: projectId, meter_id: meterId,
         reading_at: new Date(`${readingDate}T00:00:00Z`).toISOString(),
-        extracted_value: parsed.value, evidence_id: evidenceId || null,
+        extracted_value: extracted, evidence_id: evidenceId || null,
         validation_status: 'proposed',
       })
       setReadingId(created.id)
@@ -108,8 +109,9 @@ export default function App() {
     if (!selectedReading) { setMessage('اختر قراءة مرتبطة بالعداد الحالي أولًا.'); return }
     const parsed = parseAndValidateReadingValue(officialValue)
     if (parsed.error || parsed.value === null) { setMessage(parsed.error ?? 'القيمة الرسمية مطلوبة.'); return }
+    const official = parsed.value
     await run(async () => {
-      await mizanService.validateReading(selectedReading.id, parsed.value)
+      await mizanService.validateReading(selectedReading.id, official)
       const periodStart = `${readingDate.slice(0, 7)}-01`
       const result = await mizanService.generateInvoice(selectedReading.id, periodStart, readingDate, readingDate)
       setBilling(result)
