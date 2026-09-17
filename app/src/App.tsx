@@ -111,8 +111,9 @@ export default function App() {
     const official = parsed.value
     await run(async () => {
       await mizanService.validateReading(selectedReading.id, official)
-      const periodStart = `${readingDate.slice(0, 7)}-01`
-      const result = await mizanService.generateInvoice(selectedReading.id, periodStart, readingDate, readingDate)
+      const selectedReadingDate = selectedReading.reading_at.slice(0, 10)
+      const periodStart = `${selectedReadingDate.slice(0, 7)}-01`
+      const result = await mizanService.generateInvoice(selectedReading.id, periodStart, selectedReadingDate, selectedReadingDate)
       setBilling(result)
       await loadReadings()
       setMessage('تم اعتماد القراءة ومحاولة إصدار الفاتورة بنجاح.')
