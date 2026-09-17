@@ -36,17 +36,31 @@ export default function App() {
   useEffect(() => { if (projectId) void Promise.all([loadSubscribers(), loadMeters()]) }, [projectId])
   useEffect(() => { if (meterId) void loadReadings() }, [meterId])
 
-  const selectedReading = useMemo(() => readings.find((item) => item.id === readingId), [readings, readingId])
+  const selectedReading = useMemo(
+    () => readings.find((item) => item.id === readingId),
+    [readings, readingId],
+  )
 
   async function run(task: () => Promise<void>) {
-    setLoading(true); setMessage('')
-    try { await task() } catch (error) { setMessage(error instanceof Error ? error.message : 'حدث خطأ غير متوقع.') } finally { setLoading(false) }
+    setLoading(true)
+    setMessage('')
+    try {
+      await task()
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'حدث خطأ غير متوقع.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function signIn(event: FormEvent) {
     event.preventDefault()
-    await run(async () => { const { error } = await supabase.auth.signInWithPassword({ email, password }); if (error) throw error })
+    await run(async () => {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw error
+    })
   }
+
   async function loadProjects() { setProjects(await mizanService.listProjects()) }
   async function loadSubscribers() { setSubscribers(await mizanService.listSubscribers(projectId)) }
   async function loadMeters() { setMeters(await mizanService.listMeters(projectId)) }
@@ -54,15 +68,25 @@ export default function App() {
 
   async function createSubscriber(event: FormEvent) {
     event.preventDefault()
-    await run(async () => { await mizanService.createSubscriber({ project_id: projectId, ...subscriber }); setSubscriber(emptySubscriber); await loadSubscribers() })
+    await run(async () => {
+      await mizanService.createSubscriber({ project_id: projectId, ...subscriber })
+      setSubscriber(emptySubscriber)
+      await loadSubscribers()
+    })
   }
 
   async function uploadEvidence() {
     if (!evidenceFile || !meterId) return
     const validationError = validateEvidenceFile(evidenceFile)
-    if (validationError) { setMessage(validationError); return }
+    if (validationError) {
+      setMessage(validationError)
+      return
+    }
     await run(async () => {
-      const result = await mizanService.uploadEvidence(projectId, meterId, evidenceFile, { source: 'web', user_agent: navigator.userAgent })
+      const result = await mizanService.uploadEvidence(projectId, meterId, evidenceFile, {
+        source: 'web',
+        user_agent: navigator.userAgent,
+      })
       setEvidenceId(result.id)
       setMessage(`تم إنشاء سجل الدليل وربطه بالعداد. المعرف: ${result.id}`)
     })
@@ -71,27 +95,129 @@ export default function App() {
   async function createReading() {
     const value = Number(readingValue)
     const validationError = validateReadingValue(value)
-    if (validationError) { setMessage(validationError); return }
+    if (validationError) {
+      setMessage(validationError)
+      return
+    }
     await run(async () => {
-      const created = await mizanService.createReading({ project_id: projectId, meter_id: meterId, reading_at: new Date(`${readingDate}T00:00:00Z`).toISOString(), extracted_value: value, evidence_id: evidenceId || null, validation_status: 'proposed' })
-      setReadingId(created.id); await loadReadings()
+      const created = await mizanService.createReading({
+        project_id: projectId,
+        meter_id: meterId,
+        reading_at: new Date(`${readingDate}T00:00:00Z`).toISOString(),
+        extracted_value: value,
+        evidence_id: evidenceId || null,
+        validation_status: 'proposed',
+      })
+      setReadingId(created.id)
+      await loadReadings()
     })
   }
 
   async function validateAndBill() {
     const value = Number(readingValue)
     const validationError = validateReadingValue(value)
-    if (!readingId || validationError) { setMessage(validationError ?? 'اختر قراءة أولًا.'); return }
+    if (!readingId || validationError) {
+      setMessage(validationError ?? 'اختر قراءة أولًا.')
+      return
+    }
     await run(async () => {
       await mizanService.validateReading(readingId, value)
       const periodStart = `${readingDate.slice(0, 7)}-01`
-      const periodEnd = readingDate
-      const result = await mizanService.generateInvoice(readingId, periodStart, periodEnd, readingDate)
-      setBilling(result); await loadReadings()
+      const result = await mizanService.generateInvoice(readingId, periodStart, readingDate, readingDate)
+      setBilling(result)
+      await loadReadings()
     })
   }
 
-  if (!session) return <main className="shell" dir="rtl"><section className="panel"><h1>ميزان AI</h1><p>تسجيل الدخول إلى منصة إدارة خدمات المياه</p><form onSubmit={signIn}><label>البريد الإلكتروني<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required /></label><label>كلمة المرور<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" required /></label><button disabled={loading}>{loading ? 'جارٍ التنفيذ…' : 'تسجيل الدخول'}</button><p className="error">{message}</p></form></section></main>
+  if (!session) {
+    return (
+      <main className="shell" dir="rtl">
+        <section className="panel">
+          <h1>ميزان AI</h1>
+          <p>تسجيل الدخول إلى منصة إدارة خدمات المياه</p>
+          <form onSubmit={signIn}>
+            <label>البريد الإلكتروني<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required /></label>
+            <label>كلمة المرور<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" required /></label>
+            <button disabled={loading}>{loading ? 'جارٍ التنفيذ…' : 'تسجيل الدخول'}</button>
+            <p className="error">{message}</p>
+          </form>
+        </section>
+      </main>
+    )
+  }
 
-  return <main className="shell" dir="rtl"><header className="topbar"><div><h1>ميزان AI</h1><span>{session.user.email}</span></div><button onClick={() => void supabase.auth.signOut()}>تسجيل الخروج</button></header><section className="panel"><h2>سياق المشروع</h2><label>المشروع<select value={projectId} onChange={(event) => { setProjectId(event.target.value); setMeterId(''); setReadingId(''); setBilling(null); setEvidenceId('') }}><option value="">اختر مشروعًا</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><p className="hint">تُحمّل المشاريع من Supabase ولا يوجد project ID ثابت في الواجهة.</p></section>{projectId && <><section className="panel"><h2>المشتركون</h2><div className="list">{subscribers.map((item) => <div className="list-item" key={item.id}><strong>{item.full_name}</strong><span>{item.phone || 'بدون هاتف'} · {item.status || 'غير محدد'}</span></div>)}</div><form onSubmit={createSubscriber} className="grid"><input placeholder="اسم المشترك" value={subscriber.full_name} onChange={(event) => setSubscriber({ ...subscriber, full_name: event.target.value })} required /><input placeholder="رقم الهاتف" value={subscriber.phone} onChange={(event) => setSubscriber({ ...subscriber, phone: event.target.value })} /><input placeholder="رمز المشترك" value={subscriber.subscriber_code} onChange={(event) => setSubscriber({ ...subscriber, subscriber_code: event.target.value })} /><button disabled={loading}>إنشاء مشترك</button></form></section><section className="panel"><h2>العداد والقراءات</h2><label>العداد<select value={meterId} onChange={(event) => { setMeterId(event.target.value); setReadingId(''); setBilling(null); setEvidenceId('') }}><option value="">اختر العداد</option>{meters.map((meter) => <option key={meter.id} value={meter.id}>{meter.serial_number} ({meter.meter_type})</option>)}</select></label>{meterId && <><div className="list">{readings.slice(0, 5).map((item) => <div className="list-item" key={item.id}><span>{item.reading_date}</span><strong>{item.official_value ?? item.corrected_value ?? item.extracted_value ?? '—'}</strong><span>{item.validation_status}</span></div>)}</div><div className="grid"><label>قيمة القراءة<input type="number" min="0" value={readingValue} onChange={(event) => setReadingValue(event.target.value)} /></label><label>تاريخ القراءة<input type="date" value={readingDate} onChange={(event) => setReadingDate(event.target.value)} /></label><label>صورة الدليل<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setEvidenceFile(event.target.files?.[0] ?? null)} /></label><button type="button" onClick={() => void uploadEvidence()} disabled={!evidenceFile || loading}>رفع الدليل وإنشاء سجله</button><button type="button" onClick={() => void createReading()} disabled={loading}>تسجيل القراءة</button></div><p className="hint">الدليل يُحفظ في Storage الخاص ثم يُنشأ له سجل meter_evidence مستقل، والقراءة تشير إلى UUID السجل.</p>{evidenceId && <p>معرف سجل الدليل: {evidenceId}</p>}<button type="button" onClick={() => void validateAndBill()} disabled={!readingId || loading}>اعتماد القراءة وإصدار الفاتورة</button>{selectedReading && <p>القراءة المختارة: {selectedReading.id}</p>}</>}</section>{billing && <section className="panel"><h2>نتيجة الفوترة من الخادم</h2><div className="result">{Object.entries(billing).map(([key, value]) => <div key={key}><span>{key}</span><strong>{String(value ?? '—')}</strong></div>)}</div><p className="hint">القيم المعروضة من invoice وreceivable وaudit_events بعد تنفيذ RPC الخادمية.</p></section></>}{message && <p className="error">{message}</p>}</main>
+  return (
+    <main className="shell" dir="rtl">
+      <header className="topbar">
+        <div><h1>ميزان AI</h1><span>{session.user.email}</span></div>
+        <button onClick={() => void supabase.auth.signOut()}>تسجيل الخروج</button>
+      </header>
+
+      <section className="panel">
+        <h2>سياق المشروع</h2>
+        <label>المشروع
+          <select value={projectId} onChange={(event) => { setProjectId(event.target.value); setMeterId(''); setReadingId(''); setBilling(null); setEvidenceId('') }}>
+            <option value="">اختر مشروعًا</option>
+            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+          </select>
+        </label>
+        <p className="hint">تُحمّل المشاريع من Supabase ولا يوجد project ID ثابت في الواجهة.</p>
+      </section>
+
+      {projectId && (
+        <>
+          <section className="panel">
+            <h2>المشتركون</h2>
+            <div className="list">
+              {subscribers.map((item) => <div className="list-item" key={item.id}><strong>{item.full_name}</strong><span>{item.phone || 'بدون هاتف'} · {item.status || 'غير محدد'}</span></div>)}
+            </div>
+            <form onSubmit={createSubscriber} className="grid">
+              <input placeholder="اسم المشترك" value={subscriber.full_name} onChange={(event) => setSubscriber({ ...subscriber, full_name: event.target.value })} required />
+              <input placeholder="رقم الهاتف" value={subscriber.phone} onChange={(event) => setSubscriber({ ...subscriber, phone: event.target.value })} />
+              <input placeholder="رمز المشترك" value={subscriber.subscriber_code} onChange={(event) => setSubscriber({ ...subscriber, subscriber_code: event.target.value })} />
+              <button disabled={loading}>إنشاء مشترك</button>
+            </form>
+          </section>
+
+          <section className="panel">
+            <h2>العداد والقراءات</h2>
+            <label>العداد
+              <select value={meterId} onChange={(event) => { setMeterId(event.target.value); setReadingId(''); setBilling(null); setEvidenceId('') }}>
+                <option value="">اختر العداد</option>
+                {meters.map((meter) => <option key={meter.id} value={meter.id}>{meter.serial_number} ({meter.meter_type})</option>)}
+              </select>
+            </label>
+            {meterId && (
+              <>
+                <div className="list">
+                  {readings.slice(0, 5).map((item) => <div className="list-item" key={item.id}><span>{item.reading_date}</span><strong>{item.official_value ?? item.corrected_value ?? item.extracted_value ?? '—'}</strong><span>{item.validation_status}</span></div>)}
+                </div>
+                <div className="grid">
+                  <label>قيمة القراءة<input type="number" min="0" value={readingValue} onChange={(event) => setReadingValue(event.target.value)} /></label>
+                  <label>تاريخ القراءة<input type="date" value={readingDate} onChange={(event) => setReadingDate(event.target.value)} /></label>
+                  <label>صورة الدليل<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setEvidenceFile(event.target.files?.[0] ?? null)} /></label>
+                  <button type="button" onClick={() => void uploadEvidence()} disabled={!evidenceFile || loading}>رفع الدليل وإنشاء سجله</button>
+                  <button type="button" onClick={() => void createReading()} disabled={loading}>تسجيل القراءة</button>
+                </div>
+                <p className="hint">الدليل يُحفظ في Storage الخاص ثم يُنشأ له سجل meter_evidence مستقل، والقراءة تشير إلى UUID السجل.</p>
+                {evidenceId && <p>معرف سجل الدليل: {evidenceId}</p>}
+                <button type="button" onClick={() => void validateAndBill()} disabled={!readingId || loading}>اعتماد القراءة وإصدار الفاتورة</button>
+                {selectedReading && <p>القراءة المختارة: {selectedReading.id}</p>}
+              </>
+            )}
+          </section>
+
+          {billing && (
+            <section className="panel">
+              <h2>نتيجة الفوترة من الخادم</h2>
+              <div className="result">{Object.entries(billing).map(([key, value]) => <div key={key}><span>{key}</span><strong>{String(value ?? '—')}</strong></div>)}</div>
+              <p className="hint">القيم المعروضة من invoice وreceivable وaudit_events بعد تنفيذ RPC الخادمية.</p>
+            </section>
+          )}
+        </>
+      )}
+
+      {message && <p className="error">{message}</p>}
+    </main>
+  )
 }
