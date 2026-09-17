@@ -27,6 +27,15 @@ export interface ReadingInput {
   operation_id?: string
 }
 
+const requireUserId = async () => {
+  const { data, error } = await supabase.auth.getUser()
+  if (error) throw error
+  if (!data.user) throw new Error('authentication_required')
+  return data.user.id
+}
+
+const operationId = () => crypto.randomUUID()
+
 export const mizanService = {
   async listProjects(): Promise<Project[]> {
     const { data, error } = await supabase.from('projects').select('id,name,organization_id,status').order('name')
@@ -39,20 +48,11 @@ export const mizanService = {
     if (search.trim()) query = query.ilike('full_name', `%${search.trim()}%`)
     const { data, error } = await query
     if (error) throw error
-    return (data ?? []).map((item) => ({
-      ...item,
-      subscriber_code: item.customer_reference,
-      status: item.service_status,
-    })) as Subscriber[]
+    return (data ?? []).map((item) => ({ ...item, subscriber_code: item.customer_reference, status: item.service_status })) as Subscriber[]
   },
 
   async createSubscriber(input: Pick<Subscriber, 'project_id' | 'full_name' | 'phone' | 'subscriber_code'>) {
-    const { data, error } = await supabase.from('subscribers').insert({
-      project_id: input.project_id,
-      full_name: input.full_name,
-      phone: input.phone,
-      customer_reference: input.subscriber_code,
-    }).select().single()
+    const { data, error } = await supabase.from('subscribers').insert({ project_id: input.project_id, full_name: input.full_name, phone: input.phone, customer_reference: input.subscriber_code, created_by: await requireUserId() }).select().single()
     if (error) throw error
     return { ...data, subscriber_code: data.customer_reference, status: data.service_status } as Subscriber
   },
@@ -70,25 +70,13 @@ export const mizanService = {
   },
 
   async uploadEvidence(projectId: string, meterId: string, file: File, metadata: Record<string, unknown> = {}): Promise<EvidenceRecord> {
+    const userId = await requireUserId()
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
     const path = `projects/${projectId}/${crypto.randomUUID()}-${safeName}`
-    const { error: uploadError } = await supabase.storage.from('meter-evidence').upload(path, file, {
-      contentType: file.type,
-      cacheControl: '3600',
-      upsert: false,
-    })
+    const { error: uploadError } = await supabase.storage.from('meter-evidence').upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false })
     if (uploadError) throw uploadError
 
-    const { data, error: recordError } = await supabase.from('meter_evidence').insert({
-      project_id: projectId,
-      meter_id: meterId,
-      storage_path: path,
-      captured_at: new Date().toISOString(),
-      device_metadata: { ...metadata, original_name: file.name, content_type: file.type, size_bytes: file.size },
-      image_quality_status: 'pending',
-      recognition_status: 'pending',
-    }).select().single()
-
+    const { data, error: recordError } = await supabase.from('meter_evidence').insert({ project_id: projectId, meter_id: meterId, storage_path: path, captured_at: new Date().toISOString(), device_metadata: { ...metadata, original_name: file.name, content_type: file.type, size_bytes: file.size }, image_quality_status: 'pending', recognition_status: 'pending', created_by: userId }).select().single()
     if (recordError) {
       await supabase.storage.from('meter-evidence').remove([path])
       throw recordError
@@ -97,29 +85,20 @@ export const mizanService = {
   },
 
   async createReading(input: ReadingInput): Promise<MeterReading> {
-    const { data, error } = await supabase.from('meter_readings').insert(input).select().single()
+    const payload = { ...input, created_by: await requireUserId(), operation_id: input.operation_id ?? operationId() }
+    const { data, error } = await supabase.from('meter_readings').insert(payload).select().single()
     if (error) throw error
     return { ...data, reading_date: data.reading_at } as MeterReading
   },
 
   async validateReading(readingId: string, officialValue: number, reason?: string): Promise<string> {
-    const { data, error } = await supabase.rpc('mizan_validate_reading', {
-      p_reading_id: readingId,
-      p_official_value: officialValue,
-      p_reason: reason ?? null,
-    })
+    const { data, error } = await supabase.rpc('mizan_validate_reading', { p_reading_id: readingId, p_official_value: officialValue, p_reason: reason ?? null, p_operation_id: operationId() })
     if (error) throw error
     return data as string
   },
 
   async generateInvoice(readingId: string, billingPeriodStart: string, billingPeriodEnd: string, dueDate: string, arrears = 0): Promise<BillingResult> {
-    const { data: invoiceId, error } = await supabase.rpc('mizan_generate_invoice', {
-      p_current_reading_id: readingId,
-      p_billing_period_start: billingPeriodStart,
-      p_billing_period_end: billingPeriodEnd,
-      p_due_date: dueDate,
-      p_arrears: arrears,
-    })
+    const { data: invoiceId, error } = await supabase.rpc('mizan_generate_invoice', { p_current_reading_id: readingId, p_billing_period_start: billingPeriodStart, p_billing_period_end: billingPeriodEnd, p_due_date: dueDate, p_arrears: arrears, p_operation_id: operationId() })
     if (error) throw error
 
     const { data: invoice, error: invoiceError } = await supabase.from('invoices').select('*').eq('id', invoiceId).single()
@@ -129,15 +108,6 @@ export const mizanService = {
     const { data: audit, error: auditError } = await supabase.from('audit_events').select('*').eq('entity_id', invoiceId).eq('entity_type', 'invoice').eq('action', 'generated').order('occurred_at', { ascending: false }).limit(1).maybeSingle()
     if (auditError) throw auditError
 
-    return {
-      invoice_id: invoice.id,
-      receivable_id: receivable.id,
-      consumption_id: invoice.consumption_id,
-      audit_event_id: audit?.id,
-      consumption_value: invoice.consumption,
-      charge_amount: invoice.charges,
-      total_due: invoice.total_due,
-      status: invoice.status,
-    }
+    return { invoice_id: invoice.id, receivable_id: receivable.id, consumption_id: invoice.consumption_id, audit_event_id: audit?.id, consumption_value: invoice.consumption, charge_amount: invoice.charges, total_due: invoice.total_due, status: invoice.status }
   },
 }
