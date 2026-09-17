@@ -21,15 +21,15 @@ export interface Meter {
   project_id: UUID
   serial_number: string
   meter_type?: string | null
-  subscriber_id?: UUID | null
-  previous_reading?: number | null
-  last_reading_at?: string | null
+  unit?: string | null
+  status?: string | null
 }
 
 export interface MeterReading {
   id: UUID
   project_id: UUID
   meter_id: UUID
+  reading_at?: string
   reading_date: string
   extracted_value?: number | null
   corrected_value?: number | null
@@ -45,5 +45,6 @@ export interface BillingResult {
   audit_event_id?: UUID
   consumption_value?: number
   charge_amount?: number
+  total_due?: number
   status?: string
 }
