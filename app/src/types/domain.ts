@@ -29,7 +29,7 @@ export interface MeterReading {
   id: UUID
   project_id: UUID
   meter_id: UUID
-  reading_at?: string
+  reading_at: string
   reading_date: string
   extracted_value?: number | null
   corrected_value?: number | null
