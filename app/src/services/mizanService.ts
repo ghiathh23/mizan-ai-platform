@@ -52,7 +52,7 @@ export const mizanService = {
   },
 
   async createSubscriber(input: Pick<Subscriber, 'project_id' | 'full_name' | 'phone' | 'subscriber_code'>) {
-    const { data, error } = await supabase.from('subscribers').insert({ project_id: input.project_id, full_name: input.full_name, phone: input.phone, customer_reference: input.subscriber_code, created_by: await requireUserId() }).select().single()
+    const { data, error } = await supabase.from('subscribers').insert({ project_id: input.project_id, full_name: input.full_name, phone: input.phone, customer_reference: input.subscriber_code }).select().single()
     if (error) throw error
     return { ...data, subscriber_code: data.customer_reference, status: data.service_status } as Subscriber
   },
