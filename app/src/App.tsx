@@ -96,7 +96,6 @@ export default function App() {
         project_id: projectId, meter_id: meterId,
         reading_at: new Date(`${readingDate}T00:00:00Z`).toISOString(),
         extracted_value: extracted, evidence_id: evidenceId || null,
-        validation_status: 'proposed',
       })
       setReadingId(created.id)
       setOfficialValue('')
