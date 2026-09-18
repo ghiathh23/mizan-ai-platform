@@ -48,9 +48,16 @@ export const mizanService = {
   },
 
   async createSubscriber(input: Pick<Subscriber, 'project_id' | 'full_name' | 'phone' | 'subscriber_code'>) {
-    const { data, error } = await supabase.from('subscribers').insert({ project_id: input.project_id, full_name: input.full_name, phone: input.phone, customer_reference: input.subscriber_code }).select().single()
+    const { data, error } = await supabase.rpc('mizan_register_subscriber', {
+      p_project_id: input.project_id,
+      p_customer_reference: input.subscriber_code,
+      p_full_name: input.full_name,
+      p_phone: input.phone ?? null,
+      p_service_area_id: null,
+    })
     if (error) throw error
-    return { ...data, subscriber_code: data.customer_reference, status: data.service_status } as Subscriber
+    if (!data) throw new Error('subscriber_missing_id')
+    return { id: data, ...input, status: 'active' } as Subscriber
   },
 
   async listMeters(projectId: string): Promise<Meter[]> {
