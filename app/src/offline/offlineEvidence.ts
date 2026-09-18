@@ -1,4 +1,4 @@
-import { createUuid } from './syncTypes'
+import { createOperationId } from './syncTypes'
 
 const DB_NAME = 'mizan-ai-offline-evidence'
 const DB_VERSION = 1
@@ -39,7 +39,7 @@ export async function saveOfflineEvidence(input: {
   file_name: string
 }): Promise<OfflineEvidenceRecord> {
   const evidence: OfflineEvidenceRecord = {
-    evidence_id: createUuid('evidence'),
+    evidence_id: createOperationId('evidence'),
     project_id: input.project_id,
     meter_id: input.meter_id,
     file_name: input.file_name,
