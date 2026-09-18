@@ -40,6 +40,11 @@ describe('collectionService', () => {
     await expect(collectionService.record({ project_id: 'p', invoice_id: 'i', amount: 1, payment_method: 'cash' })).rejects.toBe(error)
   })
 
+  it('rejects an empty void reason before calling RPC', async () => {
+    await expect(collectionService.void('collection-id', '   ')).rejects.toThrow('collection_void_reason_required')
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
   it('maps void requests', async () => {
     rpc.mockResolvedValueOnce({ data: 'void-id', error: null })
     await expect(collectionService.void('collection-id', '  تصحيح  ', 'operation-id')).resolves.toBe('void-id')
