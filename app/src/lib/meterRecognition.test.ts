@@ -14,4 +14,16 @@ describe('meter recognition contract', () => {
     expect(isRecognitionCandidateValid(createManualRecognitionCandidate({ extracted_value: Number.NaN }))).toBe(false)
     expect(isRecognitionCandidateValid(createManualRecognitionCandidate({ extracted_value: null }))).toBe(true)
   })
+
+  it('rejects confidence outside the normalized range', () => {
+    const candidate = createManualRecognitionCandidate({ extracted_value: 10 })
+    expect(isRecognitionCandidateValid({ ...candidate, confidence: -0.01 })).toBe(false)
+    expect(isRecognitionCandidateValid({ ...candidate, confidence: 1.01 })).toBe(false)
+    expect(isRecognitionCandidateValid({ ...candidate, confidence: 0.95 })).toBe(true)
+  })
+
+  it('rejects blank observed identity when supplied', () => {
+    const candidate = createManualRecognitionCandidate({ extracted_value: 10, observed_identity: '   ' })
+    expect(isRecognitionCandidateValid(candidate)).toBe(false)
+  })
 })
