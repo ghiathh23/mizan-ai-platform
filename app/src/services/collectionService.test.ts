@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }))
 
@@ -9,6 +9,10 @@ vi.mock('../lib/supabase', () => ({
 import { collectionService } from './collectionService'
 
 describe('collectionService', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('maps record input to the actual collection RPC contract', async () => {
     mocks.rpc.mockResolvedValueOnce({ data: 'collection-id', error: null })
     await expect(collectionService.record({ project_id: 'project-id', invoice_id: 'invoice-id', amount: 125, payment_method: 'cash', reference_number: '  receipt-1 ', notes: '  paid  ', idempotency_key: 'idem-key-1' })).resolves.toBe('collection-id')
