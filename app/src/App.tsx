@@ -1,7 +1,9 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
 import { supabase } from './lib/supabase'
 import { mizanService } from './services/mizanService'
 import { parseAndValidateReadingValue, validateEvidenceFile } from './lib/validation'
+import { saveOfflineEvidence } from './offline/offlineEvidence'
 import { StaffOnboardingPanel } from './components/StaffOnboardingPanel'
 import { CollectionPanel } from './components/CollectionPanel'
 import type { BillingResult, Meter, MeterReading, Project, Subscriber } from './types/domain'
@@ -82,6 +84,12 @@ export default function App() {
     const validationError = validateEvidenceFile(evidenceFile)
     if (validationError) { setMessage(validationError); return }
     await run(async () => {
+      if (!navigator.onLine) {
+        const localEvidence = await saveOfflineEvidence({ project_id: projectId, meter_id: meterId, file: evidenceFile, file_name: evidenceFile.name })
+        setEvidenceId(localEvidence.evidence_id)
+        setMessage('تم حفظ صورة الدليل محليًا. يلزم استكمال رفعها ومزامنتها قبل اعتماد القراءة.')
+        return
+      }
       const result = await mizanService.uploadEvidence(projectId, meterId, evidenceFile, { source: 'web', user_agent: navigator.userAgent })
       setEvidenceId(result.id)
       setMessage(`تم إنشاء سجل الدليل وربطه بالعداد. المعرف: ${result.id}`)
