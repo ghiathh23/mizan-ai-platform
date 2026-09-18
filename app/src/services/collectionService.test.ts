@@ -32,7 +32,7 @@ describe('collectionService', () => {
 
   it('maps void requests', async () => {
     mocks.rpc.mockResolvedValueOnce({ data: 'void-id', error: null })
-    await expect(collectionService.void('collection-id', '  تصحيح  ', 'operation-id')).resolves.toBe('void-id')
-    expect(mocks.rpc).toHaveBeenCalledWith('mizan_void_collection', { p_collection_id: 'collection-id', p_reason: 'تصحيح', p_operation_id: 'operation-id' })
+    await expect(collectionService.void('collection-id', '  تصحيح  ', '00000000-0000-4000-8000-000000000001')).resolves.toBe('void-id')
+    expect(mocks.rpc).toHaveBeenCalledWith('mizan_void_collection', { p_collection_id: 'collection-id', p_reason: 'تصحيح', p_operation_id: '00000000-0000-4000-8000-000000000001' })
   })
 })
