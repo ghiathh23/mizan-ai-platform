@@ -113,19 +113,19 @@ export const mizanService = {
       } as MeterReading
     }
 
-    const userId = await requireUserId()
-    const payload = {
-      project_id: input.project_id,
-      meter_id: input.meter_id,
-      evidence_id: input.evidence_id ?? null,
-      reading_at: input.reading_at,
-      extracted_value: parsedValue,
-      validation_status: 'proposed' as const,
-      created_by: userId,
-      operation_id: input.operation_id ?? operationId(),
-    }
-    const { data, error } = await supabase.from('meter_readings').insert(payload).select().single()
+    const { data: readingId, error } = await supabase.rpc('mizan_sync_meter_reading', {
+      p_project_id: input.project_id,
+      p_meter_id: input.meter_id,
+      p_evidence_id: input.evidence_id ?? null,
+      p_reading_at: input.reading_at,
+      p_extracted_value: parsedValue,
+      p_operation_id: input.operation_id ?? operationId(),
+    })
     if (error) throw error
+    if (!readingId) throw new Error('reading_missing_id')
+
+    const { data, error: readError } = await supabase.from('meter_readings').select('id,project_id,meter_id,reading_at,extracted_value,corrected_value,official_value,validation_status,evidence_id').eq('id', readingId).single()
+    if (readError) throw readError
     return { ...data, reading_date: data.reading_at } as MeterReading
   },
 
