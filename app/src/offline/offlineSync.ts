@@ -14,6 +14,16 @@ const isTransientError = (error: DatabaseError | null) => {
   return true
 }
 
+function validateReadingPayload(operation: OfflineOperation<OfflineReadingPayload>): string | null {
+  const payload = operation.payload
+  if (!payload || payload.project_id !== operation.project_id) return 'invalid_operation_project'
+  if (!payload.project_id || !payload.meter_id) return 'invalid_reading_reference'
+  if (!payload.reading_at || Number.isNaN(Date.parse(payload.reading_at))) return 'invalid_reading_timestamp'
+  if (!Number.isFinite(payload.extracted_value) || payload.extracted_value < 0) return 'invalid_reading_value'
+  if (payload.evidence_id !== null && !payload.evidence_id) return 'invalid_evidence_reference'
+  return null
+}
+
 async function safeUpdateOperationStatus(operationId: string, status: Parameters<typeof updateOperationStatus>[1], errorMessage?: string) {
   try {
     await updateOperationStatus(operationId, status, errorMessage)
@@ -51,6 +61,13 @@ export async function syncPendingOperations(): Promise<SyncResult> {
     try {
       if (operation.operation_type !== 'meter_reading.create') {
         await safeUpdateOperationStatus(operation.operation_id, 'rejected', 'unsupported_operation_type')
+        result.rejected += 1
+        continue
+      }
+
+      const payloadError = validateReadingPayload(operation as OfflineOperation<OfflineReadingPayload>)
+      if (payloadError) {
+        await safeUpdateOperationStatus(operation.operation_id, 'rejected', payloadError)
         result.rejected += 1
         continue
       }
