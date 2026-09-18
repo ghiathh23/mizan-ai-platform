@@ -8,6 +8,10 @@ interface CollectionPanelProps {
   onMessage?: (message: string) => void
 }
 
+export function isCollectionReady(projectId: string, invoiceId?: string | null, disabled = false): boolean {
+  return Boolean(projectId && invoiceId && !disabled)
+}
+
 const methods: Array<{ value: CollectionPaymentMethod; label: string }> = [
   { value: 'cash', label: 'نقدًا' },
   { value: 'bank_transfer', label: 'تحويل بنكي' },
@@ -22,6 +26,7 @@ export function CollectionPanel({ projectId, invoiceId, disabled, onMessage }: C
   const [notes, setNotes] = useState('')
   const [records, setRecords] = useState<CollectionRecord[]>([])
   const [loading, setLoading] = useState(false)
+  const ready = isCollectionReady(projectId, invoiceId, disabled)
 
   async function load() {
     if (!projectId) return
@@ -59,11 +64,11 @@ export function CollectionPanel({ projectId, invoiceId, disabled, onMessage }: C
     <h2>التحصيل</h2>
     <p className="hint">يُسمح بالتسجيل والإلغاء وفق صلاحيات المشروع التي يتحقق منها الخادم.</p>
     <form onSubmit={submit} className="grid">
-      <label>المبلغ<input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required disabled={disabled || loading || !invoiceId} /></label>
-      <label>طريقة الدفع<select value={method} onChange={(event) => setMethod(event.target.value as CollectionPaymentMethod)} disabled={disabled || loading || !invoiceId}>{methods.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-      <label>رقم المرجع<input value={reference} onChange={(event) => setReference(event.target.value)} disabled={disabled || loading || !invoiceId} /></label>
-      <label>ملاحظات<textarea value={notes} onChange={(event) => setNotes(event.target.value)} disabled={disabled || loading || !invoiceId} /></label>
-      <button type="submit" disabled={disabled || loading || !projectId || !invoiceId}>{loading ? 'جارٍ التسجيل…' : 'تسجيل التحصيل'}</button>
+      <label>المبلغ<input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required disabled={!ready || loading} /></label>
+      <label>طريقة الدفع<select value={method} onChange={(event) => setMethod(event.target.value as CollectionPaymentMethod)} disabled={!ready || loading}>{methods.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+      <label>رقم المرجع<input value={reference} onChange={(event) => setReference(event.target.value)} disabled={!ready || loading} /></label>
+      <label>ملاحظات<textarea value={notes} onChange={(event) => setNotes(event.target.value)} disabled={!ready || loading} /></label>
+      <button type="submit" disabled={!ready || loading}>{loading ? 'جارٍ التسجيل…' : 'تسجيل التحصيل'}</button>
     </form>
     <div className="list">{records.map((record) => <div className="list-item" key={record.id}><strong>{record.amount}</strong><span>{record.payment_method} · {record.status}</span><span>{record.reference_number || 'بدون مرجع'}</span></div>)}</div>
   </section>
