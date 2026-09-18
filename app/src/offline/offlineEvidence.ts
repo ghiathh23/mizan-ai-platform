@@ -75,6 +75,22 @@ export async function getOfflineEvidence(evidenceId: string): Promise<OfflineEvi
   }
 }
 
+export async function listOfflineEvidence(projectId?: string): Promise<OfflineEvidenceRecord[]> {
+  const database = await openDatabase()
+  try {
+    return await new Promise((resolve, reject) => {
+      const request = database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll()
+      request.onsuccess = () => {
+        const records = request.result as OfflineEvidenceRecord[]
+        resolve(projectId ? records.filter((record) => record.project_id === projectId) : records)
+      }
+      request.onerror = () => reject(request.error ?? new Error('offline_evidence_list_failed'))
+    })
+  } finally {
+    database.close()
+  }
+}
+
 export async function deleteOfflineEvidence(evidenceId: string): Promise<void> {
   const database = await openDatabase()
   try {
