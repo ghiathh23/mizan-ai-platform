@@ -9,6 +9,8 @@ export interface OfflineReadingPayload {
   extracted_value: number
 }
 
+let deviceId: string | null = null
+
 export async function queueOfflineReading(payload: OfflineReadingPayload): Promise<string> {
   // The database stores operation_id as UUID; keep the local operation ID wire-compatible.
   const operation_id = createUuid()
@@ -16,6 +18,7 @@ export async function queueOfflineReading(payload: OfflineReadingPayload): Promi
     operation_id,
     device_id: getDeviceId(),
     project_id: payload.project_id,
+    meter_id: payload.meter_id,
     entity_type: 'meter_reading',
     entity_id: operation_id,
     operation_type: 'meter_reading.create',
@@ -35,5 +38,6 @@ function createUuid(): string {
 }
 
 function getDeviceId(): string {
-  return createUuid()
+  if (!deviceId) deviceId = createUuid()
+  return deviceId
 }
