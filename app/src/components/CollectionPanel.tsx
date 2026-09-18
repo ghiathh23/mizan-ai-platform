@@ -1,15 +1,12 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { collectionService, type CollectionPaymentMethod, type CollectionRecord } from '../services/collectionService'
+import { isCollectionReady } from './collectionPanelLogic'
 
 interface CollectionPanelProps {
   projectId: string
   invoiceId?: string | null
   disabled?: boolean
   onMessage?: (message: string) => void
-}
-
-export function isCollectionReady(projectId: string, invoiceId?: string | null, disabled = false): boolean {
-  return Boolean(projectId && invoiceId && !disabled)
 }
 
 const methods: Array<{ value: CollectionPaymentMethod; label: string }> = [
