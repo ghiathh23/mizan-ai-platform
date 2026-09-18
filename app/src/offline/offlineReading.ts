@@ -1,5 +1,5 @@
 import { enqueueOperation } from './offlineQueue'
-import { createOperationId, type OfflineOperation } from './syncTypes'
+import type { OfflineOperation } from './syncTypes'
 
 export interface OfflineReadingPayload {
   project_id: string
@@ -10,7 +10,8 @@ export interface OfflineReadingPayload {
 }
 
 export async function queueOfflineReading(payload: OfflineReadingPayload): Promise<string> {
-  const operation_id = createOperationId('reading')
+  // The database stores operation_id as UUID; keep the local operation ID wire-compatible.
+  const operation_id = createUuid()
   const operation: OfflineOperation<OfflineReadingPayload> = {
     operation_id,
     device_id: getDeviceId(),
@@ -26,6 +27,11 @@ export async function queueOfflineReading(payload: OfflineReadingPayload): Promi
   }
   await enqueueOperation(operation)
   return operation_id
+}
+
+function createUuid(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  throw new Error('secure_uuid_unavailable')
 }
 
 function getDeviceId(): string {
