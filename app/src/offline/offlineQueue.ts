@@ -23,44 +23,58 @@ function openDatabase(): Promise<IDBDatabase> {
 
 export async function enqueueOperation<TPayload>(operation: OfflineOperation<TPayload>): Promise<void> {
   const database = await openDatabase()
-  await new Promise<void>((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, 'readwrite')
-    transaction.objectStore(STORE_NAME).put(operation)
-    transaction.onerror = () => reject(transaction.error ?? new Error('تعذر حفظ العملية محليًا.'))
-    transaction.oncomplete = () => resolve()
-  })
-  database.close()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(STORE_NAME, 'readwrite')
+      transaction.objectStore(STORE_NAME).put(operation)
+      transaction.onerror = () => reject(transaction.error ?? new Error('تعذر حفظ العملية محليًا.'))
+      transaction.oncomplete = () => resolve()
+    })
+  } finally {
+    database.close()
+  }
 }
 
 export async function listPendingOperations(): Promise<OfflineOperation[]> {
   const database = await openDatabase()
-  return new Promise((resolve, reject) => {
-    const request = database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll()
-    request.onerror = () => reject(request.error ?? new Error('تعذر قراءة قائمة المزامنة.'))
-    request.onsuccess = () => {
-      database.close()
-      resolve((request.result as OfflineOperation[]).filter((operation) => operation.status === 'queued' || operation.status === 'retryable_error'))
-    }
-  })
+  try {
+    return await new Promise((resolve, reject) => {
+      const request = database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll()
+      request.onerror = () => reject(request.error ?? new Error('تعذر قراءة قائمة المزامنة.'))
+      request.onsuccess = () => {
+        resolve((request.result as OfflineOperation[]).filter((operation) => operation.status === 'queued' || operation.status === 'retryable_error'))
+      }
+    })
+  } finally {
+    database.close()
+  }
 }
 
 export async function updateOperationStatus(operationId: string, status: SyncStatus, lastError?: string | null): Promise<void> {
   const database = await openDatabase()
-  await new Promise<void>((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, 'readwrite')
-    const store = transaction.objectStore(STORE_NAME)
-    const request = store.get(operationId)
-    request.onerror = () => reject(request.error ?? new Error('تعذر تحديث العملية.'))
-    request.onsuccess = () => {
-      const operation = request.result as OfflineOperation | undefined
-      if (!operation) {
-        reject(new Error('العملية غير موجودة محليًا.'))
-        return
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(STORE_NAME, 'readwrite')
+      const store = transaction.objectStore(STORE_NAME)
+      const request = store.get(operationId)
+      request.onerror = () => reject(request.error ?? new Error('تعذر تحديث العملية.'))
+      request.onsuccess = () => {
+        const operation = request.result as OfflineOperation | undefined
+        if (!operation) {
+          reject(new Error('العملية غير موجودة محليًا.'))
+          return
+        }
+        store.put({
+          ...operation,
+          status,
+          last_error: lastError ?? null,
+          retry_count: status === 'retryable_error' ? operation.retry_count + 1 : operation.retry_count,
+        })
       }
-      store.put({ ...operation, status, last_error: lastError ?? null, retry_count: status === 'retryable_error' ? operation.retry_count + 1 : operation.retry_count })
-    }
-    transaction.onerror = () => reject(transaction.error ?? new Error('تعذر تحديث العملية.'))
-    transaction.oncomplete = () => resolve()
-  })
-  database.close()
+      transaction.onerror = () => reject(transaction.error ?? new Error('تعذر تحديث العملية.'))
+      transaction.oncomplete = () => resolve()
+    })
+  } finally {
+    database.close()
+  }
 }
