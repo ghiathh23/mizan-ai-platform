@@ -5,11 +5,21 @@ import type { OfflineReadingPayload } from './offlineReading'
 
 type DatabaseError = { code?: string; message?: string }
 
+type SyncResult = { synced: number; retryable: number; rejected: number }
+
 const isTransientError = (error: DatabaseError | null) => {
   if (!error) return false
   if (error.code === '23505' || error.code === '23503' || error.code === '23514' || error.code === '42501' || error.code === '22023') return false
   if (error.message === 'authentication_required' || error.message === 'secure_uuid_unavailable') return false
   return true
+}
+
+async function safeUpdateOperationStatus(operationId: string, status: Parameters<typeof updateOperationStatus>[1], errorMessage?: string) {
+  try {
+    await updateOperationStatus(operationId, status, errorMessage)
+  } catch {
+    // A local IndexedDB failure must not terminate the remaining sync batch.
+  }
 }
 
 async function syncReading(operation: OfflineOperation<OfflineReadingPayload>) {
@@ -27,39 +37,39 @@ async function syncReading(operation: OfflineOperation<OfflineReadingPayload>) {
   return data as string
 }
 
-export async function syncPendingOperations(): Promise<{ synced: number; retryable: number; rejected: number }> {
+export async function syncPendingOperations(): Promise<SyncResult> {
   const { data, error: userError } = await supabase.auth.getUser()
   if (userError) throw userError
   if (!data.user) throw new Error('authentication_required')
 
   const operations = await listPendingOperations()
-  let synced = 0
-  let retryable = 0
-  let rejected = 0
+  const result: SyncResult = { synced: 0, retryable: 0, rejected: 0 }
 
   for (const operation of operations) {
+    await safeUpdateOperationStatus(operation.operation_id, 'syncing')
+
     try {
-      await updateOperationStatus(operation.operation_id, 'syncing')
       if (operation.operation_type !== 'meter_reading.create') {
-        await updateOperationStatus(operation.operation_id, 'rejected', 'unsupported_operation_type')
-        rejected += 1
+        await safeUpdateOperationStatus(operation.operation_id, 'rejected', 'unsupported_operation_type')
+        result.rejected += 1
         continue
       }
 
       await syncReading(operation as OfflineOperation<OfflineReadingPayload>)
-      await updateOperationStatus(operation.operation_id, 'synced')
-      synced += 1
+      await safeUpdateOperationStatus(operation.operation_id, 'synced')
+      result.synced += 1
     } catch (error) {
       const normalized = error as DatabaseError
-      if (isTransientError(normalized)) {
-        await updateOperationStatus(operation.operation_id, 'retryable_error', normalized.message ?? 'sync_failed')
-        retryable += 1
-      } else {
-        await updateOperationStatus(operation.operation_id, 'rejected', normalized.message ?? 'sync_rejected')
-        rejected += 1
-      }
+      const retryable = isTransientError(normalized)
+      await safeUpdateOperationStatus(
+        operation.operation_id,
+        retryable ? 'retryable_error' : 'rejected',
+        normalized.message ?? (retryable ? 'sync_failed' : 'sync_rejected'),
+      )
+      if (retryable) result.retryable += 1
+      else result.rejected += 1
     }
   }
 
-  return { synced, retryable, rejected }
+  return result
 }
