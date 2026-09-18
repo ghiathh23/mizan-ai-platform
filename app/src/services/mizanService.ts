@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { getOfflineEvidence } from '../offline/offlineEvidence'
 import { queueOfflineReading } from '../offline/offlineReading'
 import type { BillingResult, Meter, MeterReading, Project, Subscriber } from '../types/domain'
 
@@ -92,6 +93,10 @@ export const mizanService = {
     const parsedValue = input.extracted_value ?? null
     if (!navigator.onLine) {
       if (parsedValue === null) throw new Error('offline_reading_value_required')
+      if (input.evidence_id) {
+        const localEvidence = await getOfflineEvidence(input.evidence_id)
+        if (localEvidence) throw new Error('offline_evidence_sync_required')
+      }
       const queuedId = await queueOfflineReading({
         project_id: input.project_id,
         meter_id: input.meter_id,
