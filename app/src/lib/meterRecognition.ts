@@ -26,5 +26,12 @@ export function createManualRecognitionCandidate(input: {
 }
 
 export function isRecognitionCandidateValid(candidate: MeterRecognitionCandidate): boolean {
-  return candidate.extracted_value === null || (Number.isFinite(candidate.extracted_value) && candidate.extracted_value >= 0)
+  const validConfidence = candidate.confidence === null || (
+    Number.isFinite(candidate.confidence) && candidate.confidence >= 0 && candidate.confidence <= 1
+  )
+  const validIdentity = candidate.observed_identity === null || candidate.observed_identity.trim().length > 0
+  const validReading = candidate.extracted_value === null || (
+    Number.isFinite(candidate.extracted_value) && candidate.extracted_value >= 0
+  )
+  return validConfidence && validIdentity && validReading
 }
