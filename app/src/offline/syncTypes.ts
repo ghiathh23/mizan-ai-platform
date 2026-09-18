@@ -18,7 +18,7 @@ export function isRetryableSyncStatus(status: SyncStatus): boolean {
   return status === 'queued' || status === 'retryable_error'
 }
 
-export function createOperationId(prefix = 'op'): string {
-  const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  return `${prefix}_${random}`
+export function createOperationId(_prefix = 'op'): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  throw new Error('secure_uuid_unavailable')
 }
