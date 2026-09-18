@@ -21,8 +21,10 @@ export function CollectionPanel({ projectId, invoiceId, disabled, onMessage }: C
   const [method, setMethod] = useState<CollectionPaymentMethod>('cash')
   const [reference, setReference] = useState('')
   const [notes, setNotes] = useState('')
+  const [voidReason, setVoidReason] = useState('')
   const [records, setRecords] = useState<CollectionRecord[]>([])
   const [loading, setLoading] = useState(false)
+  const [voidingId, setVoidingId] = useState<string | null>(null)
   const ready = isCollectionReady(projectId, invoiceId, disabled)
 
   async function load() {
@@ -57,6 +59,25 @@ export function CollectionPanel({ projectId, invoiceId, disabled, onMessage }: C
     } finally { setLoading(false) }
   }
 
+  async function voidRecord(record: CollectionRecord) {
+    const reason = voidReason.trim()
+    if (reason.length < 5) {
+      onMessage?.('سبب الإلغاء يجب أن يكون 5 أحرف على الأقل.')
+      return
+    }
+    if (!window.confirm('هل أنت متأكد من إلغاء سجل التحصيل؟ سيتم عكس المبلغ على الفاتورة.')) return
+
+    setVoidingId(record.id)
+    try {
+      await collectionService.void(record.id, reason)
+      setVoidReason('')
+      await load()
+      onMessage?.('تم إلغاء التحصيل وعكس المبلغ.')
+    } catch (error) {
+      onMessage?.(error instanceof Error ? error.message : 'تعذر إلغاء التحصيل.')
+    } finally { setVoidingId(null) }
+  }
+
   return <section className="panel">
     <h2>التحصيل</h2>
     <p className="hint">يُسمح بالتسجيل والإلغاء وفق صلاحيات المشروع التي يتحقق منها الخادم.</p>
@@ -67,6 +88,14 @@ export function CollectionPanel({ projectId, invoiceId, disabled, onMessage }: C
       <label>ملاحظات<textarea value={notes} onChange={(event) => setNotes(event.target.value)} disabled={!ready || loading} /></label>
       <button type="submit" disabled={!ready || loading}>{loading ? 'جارٍ التسجيل…' : 'تسجيل التحصيل'}</button>
     </form>
-    <div className="list">{records.map((record) => <div className="list-item" key={record.id}><strong>{record.amount}</strong><span>{record.payment_method} · {record.status}</span><span>{record.reference_number || 'بدون مرجع'}</span></div>)}</div>
+    <div className="grid">
+      <label>سبب إلغاء التحصيل<textarea value={voidReason} onChange={(event) => setVoidReason(event.target.value)} disabled={!ready || Boolean(voidingId)} placeholder="اكتب سببًا واضحًا لا يقل عن 5 أحرف" /></label>
+    </div>
+    <div className="list">{records.map((record) => <div className="list-item" key={record.id}>
+      <strong>{record.amount}</strong>
+      <span>{record.payment_method} · {record.status}</span>
+      <span>{record.reference_number || 'بدون مرجع'}</span>
+      {record.status === 'confirmed' && <button type="button" onClick={() => void voidRecord(record)} disabled={!ready || loading || Boolean(voidingId)}>{voidingId === record.id ? 'جارٍ الإلغاء…' : 'إلغاء التحصيل'}</button>}
+    </div>)}</div>
   </section>
 }
