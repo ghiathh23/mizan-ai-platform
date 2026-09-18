@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase'
-import { listOfflineEvidence, updateOfflineEvidenceSync, type OfflineEvidenceRecord } from './offlineEvidence'
+import { getOfflineEvidence, listOfflineEvidence, updateOfflineEvidenceSync, type OfflineEvidenceRecord } from './offlineEvidence'
 
 type SyncResult = { synced: number; retryable: number; rejected: number }
 type DatabaseError = { code?: string; message?: string }
@@ -45,6 +45,11 @@ async function syncOneEvidence(record: OfflineEvidenceRecord): Promise<void> {
   }
 
   await updateOfflineEvidenceSync({ evidence_id: record.evidence_id, sync_status: 'synced', server_evidence_id: data.id, last_error: null })
+}
+
+export async function getSyncedEvidenceId(localEvidenceId: string): Promise<string | null> {
+  const record = await getOfflineEvidence(localEvidenceId)
+  return record?.server_evidence_id ?? null
 }
 
 export async function syncPendingEvidence(): Promise<SyncResult> {
