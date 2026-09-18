@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { normalizeCollectionInput, validateCollectionInput, validateVoidReason } from './collectionValidation'
 
 export type CollectionPaymentMethod = 'cash' | 'bank_transfer' | 'mobile_money' | 'other'
 
@@ -38,15 +39,19 @@ const makeIdempotencyKey = () => crypto.randomUUID()
 
 export const collectionService = {
   async record(input: CollectionInput): Promise<string> {
+    const normalizedInput = normalizeCollectionInput(input)
+    const validationError = validateCollectionInput(normalizedInput)
+    if (validationError) throw new Error(validationError)
+
     const { data, error } = await supabase.rpc('mizan_record_collection', {
-      p_project_id: input.project_id,
-      p_invoice_id: input.invoice_id,
-      p_amount: input.amount,
-      p_payment_method: input.payment_method,
-      p_idempotency_key: input.idempotency_key ?? makeIdempotencyKey(),
-      p_reference_number: input.reference_number?.trim() || null,
-      p_notes: input.notes?.trim() || null,
-      p_collected_at: input.collected_at ?? new Date().toISOString(),
+      p_project_id: normalizedInput.project_id,
+      p_invoice_id: normalizedInput.invoice_id,
+      p_amount: normalizedInput.amount,
+      p_payment_method: normalizedInput.payment_method,
+      p_idempotency_key: normalizedInput.idempotency_key ?? makeIdempotencyKey(),
+      p_reference_number: normalizedInput.reference_number,
+      p_notes: normalizedInput.notes,
+      p_collected_at: normalizedInput.collected_at ?? new Date().toISOString(),
     })
     if (error) throw error
     if (!data) throw new Error('collection_missing_id')
@@ -62,12 +67,12 @@ export const collectionService = {
   },
 
   async void(collectionId: string, reason: string, operationId = crypto.randomUUID()): Promise<void> {
-    const normalizedReason = reason.trim()
-    if (normalizedReason.length < 5) throw new Error('collection_void_reason_required')
+    const validationError = validateVoidReason(reason)
+    if (validationError) throw new Error(validationError)
 
     const { error } = await supabase.rpc('mizan_void_collection', {
       p_collection_id: collectionId,
-      p_reason: normalizedReason,
+      p_reason: reason.trim(),
       p_operation_id: operationId,
     })
     if (error) throw error
