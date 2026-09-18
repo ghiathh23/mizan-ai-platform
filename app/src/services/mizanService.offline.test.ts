@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const getOfflineEvidence = vi.fn()
-const queueOfflineReading = vi.fn()
+const mocks = vi.hoisted(() => ({
+  getOfflineEvidence: vi.fn(),
+  queueOfflineReading: vi.fn(),
+}))
 
-vi.mock('../offline/offlineEvidence', () => ({ getOfflineEvidence }))
-vi.mock('../offline/offlineReading', () => ({ queueOfflineReading }))
+vi.mock('../offline/offlineEvidence', () => ({ getOfflineEvidence: mocks.getOfflineEvidence }))
+vi.mock('../offline/offlineReading', () => ({ queueOfflineReading: mocks.queueOfflineReading }))
 vi.mock('../lib/supabase', () => ({
   supabase: {
     auth: { getUser: vi.fn() },
@@ -14,14 +16,14 @@ vi.mock('../lib/supabase', () => ({
 describe('mizanService offline reading evidence handling', () => {
   beforeEach(() => {
     vi.resetModules()
-    getOfflineEvidence.mockReset()
-    queueOfflineReading.mockReset()
-    queueOfflineReading.mockResolvedValue('queued-reading-id')
+    mocks.getOfflineEvidence.mockReset()
+    mocks.queueOfflineReading.mockReset()
+    mocks.queueOfflineReading.mockResolvedValue('queued-reading-id')
     vi.stubGlobal('navigator', { onLine: false })
   })
 
   it('uses the server evidence id when local evidence is already synced', async () => {
-    getOfflineEvidence.mockResolvedValue({
+    mocks.getOfflineEvidence.mockResolvedValue({
       evidence_id: 'local-evidence-id',
       server_evidence_id: 'server-evidence-id',
       sync_status: 'synced',
@@ -36,7 +38,7 @@ describe('mizanService offline reading evidence handling', () => {
       extracted_value: 12,
     })
 
-    expect(queueOfflineReading).toHaveBeenCalledWith({
+    expect(mocks.queueOfflineReading).toHaveBeenCalledWith({
       project_id: 'project-id',
       meter_id: 'meter-id',
       evidence_id: 'server-evidence-id',
@@ -47,7 +49,7 @@ describe('mizanService offline reading evidence handling', () => {
   })
 
   it('still blocks unsynced local evidence', async () => {
-    getOfflineEvidence.mockResolvedValue({
+    mocks.getOfflineEvidence.mockResolvedValue({
       evidence_id: 'local-evidence-id',
       server_evidence_id: null,
       sync_status: 'queued',
@@ -62,6 +64,6 @@ describe('mizanService offline reading evidence handling', () => {
       reading_at: '2026-09-18T10:00:00.000Z',
       extracted_value: 12,
     })).rejects.toThrow('offline_evidence_sync_required')
-    expect(queueOfflineReading).not.toHaveBeenCalled()
+    expect(mocks.queueOfflineReading).not.toHaveBeenCalled()
   })
 })
