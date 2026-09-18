@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isCollectionReady } from './CollectionPanel'
+import { isCollectionReady } from './collectionPanelLogic'
 
 describe('isCollectionReady', () => {
   it('requires project and invoice context', () => {
