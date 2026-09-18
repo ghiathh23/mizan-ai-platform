@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { supabase } from './lib/supabase'
 import { mizanService } from './services/mizanService'
 import { parseAndValidateReadingValue, validateEvidenceFile } from './lib/validation'
+import { StaffOnboardingPanel } from './components/StaffOnboardingPanel'
 import type { BillingResult, Meter, MeterReading, Project, Subscriber } from './types/domain'
 
 const emptySubscriber = { full_name: '', phone: '', subscriber_code: '' }
@@ -39,6 +40,7 @@ export default function App() {
   }, [projectId])
   useEffect(() => { if (meterId) void loadReadings() }, [meterId])
 
+  const selectedProject = useMemo(() => projects.find((project) => project.id === projectId), [projects, projectId])
   const selectedReading = useMemo(
     () => readings.find((item) => item.id === readingId && item.meter_id === meterId),
     [readings, readingId, meterId],
@@ -139,6 +141,7 @@ export default function App() {
         <option value="">اختر مشروعًا</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
       </select></label><p className="hint">تُحمّل المشاريع من Supabase ولا يوجد project ID ثابت في الواجهة.</p>
     </section>
+    {projectId && selectedProject && <StaffOnboardingPanel organizationId={selectedProject.organization_id} projectId={selectedProject.id} onMessage={setMessage} />}
     {projectId && <>
       <section className="panel"><h2>المشتركون</h2><div className="list">{subscribers.map((item) => <div className="list-item" key={item.id}><strong>{item.full_name}</strong><span>{item.phone || 'بدون هاتف'} · {item.status || 'غير محدد'}</span></div>)}</div>
         <form onSubmit={createSubscriber} className="grid"><input placeholder="اسم المشترك" value={subscriber.full_name} onChange={(event) => setSubscriber({ ...subscriber, full_name: event.target.value })} required /><input placeholder="رقم الهاتف" value={subscriber.phone} onChange={(event) => setSubscriber({ ...subscriber, phone: event.target.value })} /><input placeholder="رمز المشترك" value={subscriber.subscriber_code} onChange={(event) => setSubscriber({ ...subscriber, subscriber_code: event.target.value })} /><button disabled={loading}>إنشاء مشترك</button></form>
