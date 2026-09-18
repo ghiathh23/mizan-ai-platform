@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { collectionService, type CollectionPaymentMethod, type CollectionRecord } from '../services/collectionService'
-import { isCollectionReady } from './collectionPanelLogic'
+import { isCollectionReady, isVoidReasonValid } from './collectionPanelLogic'
 
 interface CollectionPanelProps {
   projectId: string
@@ -61,7 +61,7 @@ export function CollectionPanel({ projectId, invoiceId, disabled, onMessage }: C
 
   async function voidRecord(record: CollectionRecord) {
     const reason = voidReason.trim()
-    if (reason.length < 5) {
+    if (!isVoidReasonValid(reason)) {
       onMessage?.('سبب الإلغاء يجب أن يكون 5 أحرف على الأقل.')
       return
     }
