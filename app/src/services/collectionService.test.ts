@@ -25,8 +25,8 @@ describe('collectionService', () => {
     await expect(collectionService.record({ project_id: 'p', invoice_id: 'i', amount: 1, payment_method: 'cash' })).rejects.toBe(error)
   })
 
-  it('rejects an empty void reason before calling RPC', async () => {
-    await expect(collectionService.void('collection-id', '   ')).rejects.toThrow('collection_void_reason_required')
+  it('rejects a void reason shorter than five characters before calling RPC', async () => {
+    await expect(collectionService.void('collection-id', '1234')).rejects.toThrow('collection_void_reason_required')
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
 
