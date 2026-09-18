@@ -62,9 +62,12 @@ export const collectionService = {
   },
 
   async void(collectionId: string, reason: string, operationId = crypto.randomUUID()): Promise<string> {
+    const normalizedReason = reason.trim()
+    if (!normalizedReason) throw new Error('collection_void_reason_required')
+
     const { data, error } = await supabase.rpc('mizan_void_collection', {
       p_collection_id: collectionId,
-      p_reason: reason.trim(),
+      p_reason: normalizedReason,
       p_operation_id: operationId,
     })
     if (error) throw error
