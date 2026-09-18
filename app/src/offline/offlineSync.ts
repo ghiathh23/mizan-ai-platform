@@ -10,7 +10,7 @@ type SyncResult = { synced: number; retryable: number; rejected: number }
 const isTransientError = (error: DatabaseError | null) => {
   if (!error) return false
   if (error.code === '23505' || error.code === '23503' || error.code === '23514' || error.code === '42501' || error.code === '22023') return false
-  if (error.message === 'authentication_required' || error.message === 'secure_uuid_unavailable') return false
+  if (error.message === 'authentication_required' || error.message === 'secure_uuid_unavailable' || error.message === 'offline_evidence_rejected') return false
   return true
 }
 
