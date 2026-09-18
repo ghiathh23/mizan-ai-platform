@@ -4,9 +4,12 @@ import { getOfflineEvidence, listOfflineEvidence, updateOfflineEvidenceSync, typ
 type SyncResult = { synced: number; retryable: number; rejected: number }
 type DatabaseError = { code?: string; message?: string }
 
+type EvidenceLookup = { id: string }
+
 function isRetryable(error: DatabaseError | null): boolean {
   if (!error) return false
   if (['23505', '23503', '23514', '42501', '22023'].includes(error.code ?? '')) return false
+  if (error.message === 'authentication_required' || error.message === 'offline_evidence_rejected') return false
   return true
 }
 
@@ -14,10 +17,39 @@ function safeFileName(fileName: string): string {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 180) || 'evidence.bin'
 }
 
+async function findExistingEvidence(record: OfflineEvidenceRecord): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('meter_evidence')
+    .select('id')
+    .eq('project_id', record.project_id)
+    .eq('meter_id', record.meter_id)
+    .contains('device_metadata', { local_evidence_id: record.evidence_id })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return (data as EvidenceLookup | null)?.id ?? null
+}
+
+async function markEvidenceSynced(record: OfflineEvidenceRecord, serverEvidenceId: string): Promise<void> {
+  await updateOfflineEvidenceSync({
+    evidence_id: record.evidence_id,
+    sync_status: 'synced',
+    server_evidence_id: serverEvidenceId,
+    last_error: null,
+  })
+}
+
 async function syncOneEvidence(record: OfflineEvidenceRecord): Promise<void> {
   const { data: userData, error: userError } = await supabase.auth.getUser()
   if (userError) throw userError
   if (!userData.user) throw new Error('authentication_required')
+
+  const existingEvidenceId = await findExistingEvidence(record)
+  if (existingEvidenceId) {
+    await markEvidenceSynced(record, existingEvidenceId)
+    return
+  }
 
   await updateOfflineEvidenceSync({ evidence_id: record.evidence_id, sync_status: 'syncing', last_error: null })
   const storagePath = `projects/${record.project_id}/offline-${record.evidence_id}-${safeFileName(record.file_name)}`
@@ -26,25 +58,44 @@ async function syncOneEvidence(record: OfflineEvidenceRecord): Promise<void> {
     cacheControl: '3600',
     upsert: false,
   })
-  if (uploadError) throw uploadError
+
+  if (uploadError) {
+    const recoveredEvidenceId = await findExistingEvidence(record)
+    if (recoveredEvidenceId) {
+      await markEvidenceSynced(record, recoveredEvidenceId)
+      return
+    }
+    throw uploadError
+  }
 
   const { data, error: insertError } = await supabase.from('meter_evidence').insert({
     project_id: record.project_id,
     meter_id: record.meter_id,
     storage_path: storagePath,
     captured_at: record.created_at,
-    device_metadata: { source: 'offline', original_name: record.file_name, content_type: record.content_type, size_bytes: record.size, local_evidence_id: record.evidence_id },
+    device_metadata: {
+      source: 'offline',
+      original_name: record.file_name,
+      content_type: record.content_type,
+      size_bytes: record.size,
+      local_evidence_id: record.evidence_id,
+    },
     image_quality_status: 'pending',
     recognition_status: 'pending',
     created_by: userData.user.id,
   }).select('id').single()
 
   if (insertError) {
+    const recoveredEvidenceId = await findExistingEvidence(record)
+    if (recoveredEvidenceId) {
+      await markEvidenceSynced(record, recoveredEvidenceId)
+      return
+    }
     await supabase.storage.from('meter-evidence').remove([storagePath])
     throw insertError
   }
 
-  await updateOfflineEvidenceSync({ evidence_id: record.evidence_id, sync_status: 'synced', server_evidence_id: data.id, last_error: null })
+  await markEvidenceSynced(record, data.id)
 }
 
 export async function getSyncedEvidenceId(localEvidenceId: string): Promise<string | null> {
@@ -63,7 +114,11 @@ export async function syncPendingEvidence(): Promise<SyncResult> {
     } catch (error) {
       const normalized = error as DatabaseError
       const retryable = isRetryable(normalized)
-      await updateOfflineEvidenceSync({ evidence_id: record.evidence_id, sync_status: retryable ? 'retryable_error' : 'rejected', last_error: normalized.message ?? (retryable ? 'evidence_sync_failed' : 'evidence_sync_rejected') })
+      await updateOfflineEvidenceSync({
+        evidence_id: record.evidence_id,
+        sync_status: retryable ? 'retryable_error' : 'rejected',
+        last_error: normalized.message ?? (retryable ? 'evidence_sync_failed' : 'evidence_sync_rejected'),
+      })
       if (retryable) result.retryable += 1
       else result.rejected += 1
     }
