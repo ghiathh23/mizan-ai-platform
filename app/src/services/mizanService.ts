@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { queueOfflineReading } from '../offline/offlineReading'
 import type { BillingResult, Meter, MeterReading, Project, Subscriber } from '../types/domain'
 
 export interface EvidenceRecord {
@@ -88,13 +89,37 @@ export const mizanService = {
   },
 
   async createReading(input: ReadingInput): Promise<MeterReading> {
+    const parsedValue = input.extracted_value ?? null
+    if (!navigator.onLine) {
+      if (parsedValue === null) throw new Error('offline_reading_value_required')
+      const queuedId = await queueOfflineReading({
+        project_id: input.project_id,
+        meter_id: input.meter_id,
+        evidence_id: input.evidence_id ?? null,
+        reading_at: input.reading_at,
+        extracted_value: parsedValue,
+      })
+      return {
+        id: queuedId,
+        project_id: input.project_id,
+        meter_id: input.meter_id,
+        evidence_id: input.evidence_id ?? null,
+        reading_at: input.reading_at,
+        reading_date: input.reading_at,
+        extracted_value: parsedValue,
+        corrected_value: null,
+        official_value: null,
+        validation_status: 'proposed',
+      } as MeterReading
+    }
+
     const userId = await requireUserId()
     const payload = {
       project_id: input.project_id,
       meter_id: input.meter_id,
       evidence_id: input.evidence_id ?? null,
       reading_at: input.reading_at,
-      extracted_value: input.extracted_value ?? null,
+      extracted_value: parsedValue,
       validation_status: 'proposed' as const,
       created_by: userId,
       operation_id: input.operation_id ?? operationId(),
