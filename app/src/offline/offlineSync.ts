@@ -7,33 +7,24 @@ type DatabaseError = { code?: string; message?: string }
 
 const isTransientError = (error: DatabaseError | null) => {
   if (!error) return false
-  if (error.code === '23505' || error.code === '23503' || error.code === '23514' || error.code === '42501') return false
+  if (error.code === '23505' || error.code === '23503' || error.code === '23514' || error.code === '42501' || error.code === '22023') return false
   if (error.message === 'authentication_required' || error.message === 'secure_uuid_unavailable') return false
   return true
 }
 
-async function syncReading(operation: OfflineOperation<OfflineReadingPayload>, userId: string) {
+async function syncReading(operation: OfflineOperation<OfflineReadingPayload>) {
   const payload = operation.payload
-  const { data, error } = await supabase.from('meter_readings').insert({
-    project_id: payload.project_id,
-    meter_id: payload.meter_id,
-    evidence_id: payload.evidence_id,
-    reading_at: payload.reading_at,
-    extracted_value: payload.extracted_value,
-    validation_status: 'proposed',
-    created_by: userId,
-    operation_id: operation.operation_id,
-  }).select('id').single()
-
-  if (!error) return data
-
-  // A retried request may already have been committed before connectivity was lost.
-  if (error.code === '23505') {
-    const { data: existing, error: lookupError } = await supabase.from('meter_readings').select('id').eq('operation_id', operation.operation_id).maybeSingle()
-    if (!lookupError && existing) return existing
-  }
-
-  throw error
+  const { data, error } = await supabase.rpc('mizan_sync_meter_reading', {
+    p_project_id: payload.project_id,
+    p_meter_id: payload.meter_id,
+    p_evidence_id: payload.evidence_id,
+    p_reading_at: payload.reading_at,
+    p_extracted_value: payload.extracted_value,
+    p_operation_id: operation.operation_id,
+  })
+  if (error) throw error
+  if (!data) throw new Error('sync_reading_missing_id')
+  return data as string
 }
 
 export async function syncPendingOperations(): Promise<{ synced: number; retryable: number; rejected: number }> {
@@ -55,7 +46,7 @@ export async function syncPendingOperations(): Promise<{ synced: number; retryab
         continue
       }
 
-      await syncReading(operation as OfflineOperation<OfflineReadingPayload>, data.user.id)
+      await syncReading(operation as OfflineOperation<OfflineReadingPayload>)
       await updateOperationStatus(operation.operation_id, 'synced')
       synced += 1
     } catch (error) {
