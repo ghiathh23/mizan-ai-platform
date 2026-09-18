@@ -18,7 +18,6 @@ export async function queueOfflineReading(payload: OfflineReadingPayload): Promi
     operation_id,
     device_id: getDeviceId(),
     project_id: payload.project_id,
-    meter_id: payload.meter_id,
     entity_type: 'meter_reading',
     entity_id: operation_id,
     operation_type: 'meter_reading.create',
