@@ -34,6 +34,15 @@ const requireUserId = async () => {
 
 const operationId = () => crypto.randomUUID()
 
+async function resolveEvidenceIdForOnlineReading(evidenceId: string | null | undefined): Promise<string | null> {
+  if (!evidenceId) return null
+  const localEvidence = await getOfflineEvidence(evidenceId)
+  if (!localEvidence) return evidenceId
+  if (localEvidence.server_evidence_id) return localEvidence.server_evidence_id
+  if (localEvidence.sync_status === 'rejected') throw new Error('offline_evidence_rejected')
+  throw new Error('offline_evidence_sync_required')
+}
+
 export const mizanService = {
   async listProjects(): Promise<Project[]> {
     const { data, error } = await supabase.from('projects').select('id,name,organization_id,status').order('name')
@@ -118,10 +127,11 @@ export const mizanService = {
       } as MeterReading
     }
 
+    const serverEvidenceId = await resolveEvidenceIdForOnlineReading(input.evidence_id)
     const { data: readingId, error } = await supabase.rpc('mizan_sync_meter_reading', {
       p_project_id: input.project_id,
       p_meter_id: input.meter_id,
-      p_evidence_id: input.evidence_id ?? null,
+      p_evidence_id: serverEvidenceId,
       p_reading_at: input.reading_at,
       p_extracted_value: parsedValue,
       p_operation_id: input.operation_id ?? operationId(),
