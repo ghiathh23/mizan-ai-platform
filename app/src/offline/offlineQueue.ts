@@ -32,19 +32,34 @@ export async function getOrCreateDeviceId(createId: () => string): Promise<strin
     return await new Promise((resolve, reject) => {
       const transaction = database.transaction(META_STORE_NAME, 'readwrite')
       const store = transaction.objectStore(META_STORE_NAME)
+      let resolved = false
+      const finish = (callback: () => void) => {
+        if (resolved) return
+        resolved = true
+        callback()
+      }
+
       const request = store.get(DEVICE_ID_KEY)
-      request.onerror = () => reject(request.error ?? new Error('تعذر قراءة هوية الجهاز.'))
+      request.onerror = () => finish(() => reject(request.error ?? new Error('تعذر قراءة هوية الجهاز.')))
       request.onsuccess = () => {
         const existing = request.result
         if (typeof existing === 'string' && existing.length > 0) {
-          resolve(existing)
+          transaction.oncomplete = () => finish(() => resolve(existing))
           return
         }
-        const generated = createId()
+
+        let generated: string
+        try {
+          generated = createId()
+        } catch (error) {
+          finish(() => reject(error))
+          return
+        }
         store.put(generated, DEVICE_ID_KEY)
-        transaction.oncomplete = () => resolve(generated)
+        transaction.oncomplete = () => finish(() => resolve(generated))
       }
-      transaction.onerror = () => reject(transaction.error ?? new Error('تعذر حفظ هوية الجهاز.'))
+      transaction.onerror = () => finish(() => reject(transaction.error ?? new Error('تعذر حفظ هوية الجهاز.')))
+      transaction.onabort = () => finish(() => reject(transaction.error ?? new Error('تعذر حفظ هوية الجهاز.')))
     })
   } finally {
     database.close()
@@ -72,7 +87,8 @@ export async function listPendingOperations(): Promise<OfflineOperation[]> {
       const request = database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll()
       request.onerror = () => reject(request.error ?? new Error('تعذر قراءة قائمة المزامنة.'))
       request.onsuccess = () => {
-        resolve((request.result as OfflineOperation[]).filter((operation) => operation.status === 'queued' || operation.status === 'retryable_error'))
+        const operations = (request.result as OfflineOperation[]).filter((operation) => operation.status === 'queued' || operation.status === 'retryable_error')
+        resolve(operations.sort((left, right) => left.created_at.localeCompare(right.created_at)))
       }
     })
   } finally {
