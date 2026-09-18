@@ -5,7 +5,6 @@ export type CollectionPaymentMethod = 'cash' | 'bank_transfer' | 'mobile_money' 
 export interface CollectionInput {
   project_id: string
   invoice_id: string
-  subscriber_id: string
   amount: number
   payment_method: CollectionPaymentMethod
   reference_number?: string | null
@@ -42,13 +41,12 @@ export const collectionService = {
     const { data, error } = await supabase.rpc('mizan_record_collection', {
       p_project_id: input.project_id,
       p_invoice_id: input.invoice_id,
-      p_subscriber_id: input.subscriber_id,
       p_amount: input.amount,
       p_payment_method: input.payment_method,
-      p_reference_number: input.reference_number?.trim() || null,
-      p_collected_at: input.collected_at ?? new Date().toISOString(),
-      p_notes: input.notes?.trim() || null,
       p_idempotency_key: input.idempotency_key ?? makeIdempotencyKey(),
+      p_reference_number: input.reference_number?.trim() || null,
+      p_notes: input.notes?.trim() || null,
+      p_collected_at: input.collected_at ?? new Date().toISOString(),
     })
     if (error) throw error
     if (!data) throw new Error('collection_missing_id')
