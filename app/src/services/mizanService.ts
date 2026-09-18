@@ -102,14 +102,20 @@ export const mizanService = {
     const parsedValue = input.extracted_value ?? null
     if (!navigator.onLine) {
       if (parsedValue === null) throw new Error('offline_reading_value_required')
+      let queuedEvidenceId = input.evidence_id ?? null
       if (input.evidence_id) {
         const localEvidence = await getOfflineEvidence(input.evidence_id)
-        if (localEvidence) throw new Error('offline_evidence_sync_required')
+        if (localEvidence?.server_evidence_id) {
+          queuedEvidenceId = localEvidence.server_evidence_id
+        } else if (localEvidence) {
+          if (localEvidence.sync_status === 'rejected') throw new Error('offline_evidence_rejected')
+          throw new Error('offline_evidence_sync_required')
+        }
       }
       const queuedId = await queueOfflineReading({
         project_id: input.project_id,
         meter_id: input.meter_id,
-        evidence_id: input.evidence_id ?? null,
+        evidence_id: queuedEvidenceId,
         reading_at: input.reading_at,
         extracted_value: parsedValue,
       })
@@ -117,7 +123,7 @@ export const mizanService = {
         id: queuedId,
         project_id: input.project_id,
         meter_id: input.meter_id,
-        evidence_id: input.evidence_id ?? null,
+        evidence_id: queuedEvidenceId,
         reading_at: input.reading_at,
         reading_date: input.reading_at,
         extracted_value: parsedValue,
