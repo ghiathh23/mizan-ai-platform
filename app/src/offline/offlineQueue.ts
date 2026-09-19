@@ -1,5 +1,3 @@
-import type { OfflineOperation, SyncStatus } from './syncTypes'
-
 const DB_NAME = 'mizan-ai-offline'
 const DB_VERSION = 2
 const STORE_NAME = 'operations'
@@ -87,7 +85,15 @@ export async function listPendingOperations(): Promise<OfflineOperation[]> {
       const request = database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll()
       request.onerror = () => reject(request.error ?? new Error('تعذر قراءة قائمة المزامنة.'))
       request.onsuccess = () => {
-        const operations = (request.result as OfflineOperation[]).filter((operation) => operation.status === 'queued' || operation.status === 'retryable_error')
+        // A previous browser session can leave an operation in `syncing`
+        // after a tab close, crash, power loss, or network interruption.
+        // Include it in the next recovery pass; the server-side operation_id
+        // remains the idempotency boundary for the RPC.
+        const operations = (request.result as OfflineOperation[]).filter((operation) =>
+          operation.status === 'queued' ||
+          operation.status === 'syncing' ||
+          operation.status === 'retryable_error',
+        )
         resolve(operations.sort((left, right) => left.created_at.localeCompare(right.created_at)))
       }
     })
