@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { createOperationId, isRetryableSyncStatus } from './syncTypes'
 
 describe('offline sync contracts', () => {
-  it('recognizes retryable statuses', () => {
+  it('recognizes retryable statuses including crash recovery', () => {
     expect(isRetryableSyncStatus('queued')).toBe(true)
+    expect(isRetryableSyncStatus('syncing')).toBe(true)
     expect(isRetryableSyncStatus('retryable_error')).toBe(true)
     expect(isRetryableSyncStatus('synced')).toBe(false)
+    expect(isRetryableSyncStatus('conflict')).toBe(false)
     expect(isRetryableSyncStatus('rejected')).toBe(false)
   })
 
