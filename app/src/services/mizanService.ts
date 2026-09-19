@@ -28,7 +28,7 @@ export interface ReadingInput {
 export function validateSubscriberInput(input: Pick<Subscriber, 'project_id' | 'full_name' | 'phone' | 'subscriber_code'>): string | null {
   if (!input.project_id.trim()) return 'project_id_required'
   if (!input.full_name.trim()) return 'subscriber_name_required'
-  if (!input.subscriber_code.trim()) return 'subscriber_code_required'
+  if (!input.subscriber_code?.trim()) return 'subscriber_code_required'
   return null
 }
 
@@ -68,17 +68,19 @@ export const mizanService = {
   async createSubscriber(input: Pick<Subscriber, 'project_id' | 'full_name' | 'phone' | 'subscriber_code'>) {
     const validationError = validateSubscriberInput(input)
     if (validationError) throw new Error(validationError)
+    const subscriberCode = input.subscriber_code?.trim()
+    if (!subscriberCode) throw new Error('subscriber_code_required')
 
     const { data, error } = await supabase.rpc('mizan_register_subscriber', {
       p_project_id: input.project_id,
-      p_customer_reference: input.subscriber_code.trim(),
+      p_customer_reference: subscriberCode,
       p_full_name: input.full_name.trim(),
       p_phone: input.phone?.trim() || null,
       p_service_area_id: null,
     })
     if (error) throw error
     if (!data) throw new Error('subscriber_missing_id')
-    return { id: data, ...input, status: 'active' } as Subscriber
+    return { id: data, ...input, subscriber_code: subscriberCode, status: 'active' } as Subscriber
   },
 
   async listMeters(projectId: string): Promise<Meter[]> {
