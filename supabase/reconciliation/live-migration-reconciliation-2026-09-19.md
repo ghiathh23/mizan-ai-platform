@@ -8,6 +8,9 @@ Supabase `list_migrations` reports **51 applied migration records**, including:
 
 - `20260919144624 restrict_internal_project_helper_execute_v1`
 - `20260919162925 harden_postgres_default_privileges_v1`
+- `20260919190443 revoke_authenticated_truncate_privileges_v1`
+- `20260919190925` direct authenticated domain-write restriction
+- `20260919191613_harden_meter_reading_input_consistency_v1`
 
 The latest default-privilege migration is stored in GitHub as:
 
@@ -39,21 +42,27 @@ The latest default-privilege migration removes `anon` and `authenticated` from d
 ## Security verification completed
 
 - RLS inspection: RLS is enabled on the inspected public tables.
-- `staff_onboarding_registry` and `user_login_identifiers` have no policies; observed table grants were limited to `postgres` and `service_role`, so no policy was added blindly.
+- Explicit deny policies were added to `staff_onboarding_registry` and `user_login_identifiers`; the previous `rls_enabled_no_policy` advisor finding no longer appears.
 - Application RPCs that are intended for authenticated clients retain their `EXECUTE` grants; their definitions were inspected for authentication, project-access, and permission checks.
 - Direct `EXECUTE` access for `anon` and `authenticated` on `mizan_private` routines is absent.
 - `mizan_private` has no `USAGE` or `CREATE` privilege for `anon`, `authenticated`, or `service_role`.
 - Migration `restrict_internal_project_helper_execute_v1` was applied to Supabase, committed to GitHub, and verified in the live migration list.
 - The default-privilege hardening migration was applied to Supabase, committed to GitHub, and verified in the live migration list.
-- GitHub Actions application CI run 130 passed install, test, and build for the preceding security hardening commit.
+- Authenticated `TRUNCATE` privileges were revoked from the inspected domain tables and verified absent.
+- Authenticated direct mutation privileges were revoked from the inspected domain tables, while evidence `INSERT` remains intentionally available pending a complete upload-path review.
+- GitHub Actions Application CI run **147** passed for commit `53d222054022caaea13e97477c2d5f42e8aea987`, including install, security scan, tests, and build.
+- The live `mizan_sync_meter_reading` function validates project/meter/evidence consistency, requires authentication and permission, and uses `p_operation_id` for idempotent replay handling.
+- A unique index, `public.meter_readings_operation_id_key`, was verified on `meter_readings(operation_id)`; the function also handles concurrent unique violations by resolving the existing reading.
 
 ## Remaining findings
 
 - Existing direct grants to `service_role` remain because this is a privileged platform role; no blanket revocation was applied without proving that Supabase-managed operations and trusted server workflows would remain functional.
 - Existing grants to `authenticated` on some tables remain subject to RLS and application compatibility review; default-privilege changes do not revoke existing grants.
+- Direct authenticated `INSERT` on `meter_evidence` remains and is protected by the current project-access policy; moving it behind a validated RPC requires further application and database contract review.
 - Supabase Auth leaked-password protection still requires a platform/dashboard-level verification or supported configuration path.
 - Historical migration SQL recovery remains unresolved.
 - `supabase_admin` default privileges were not modified because ownership and platform compatibility were not established.
+- Cross-tab offline-sync coordination is not yet guaranteed; the current in-memory guard prevents overlap within one browser tab only.
 
 ## Required authoritative evidence
 
@@ -61,4 +70,4 @@ Recover the original migration SQL from a development environment, historical br
 
 ## Current status
 
-**BLOCKED — live inventory and recent security changes verified; exact historical SQL recovery and remaining platform-level security verification are still required.**
+**BLOCKED — live inventory, recent security changes, offline CI, and reading idempotency controls are verified; exact historical SQL recovery, platform-level Auth verification, evidence-write review, and cross-tab synchronization hardening remain required.**
