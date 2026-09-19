@@ -25,6 +25,13 @@ export interface ReadingInput {
   operation_id?: string
 }
 
+export function validateSubscriberInput(input: Pick<Subscriber, 'project_id' | 'full_name' | 'phone' | 'subscriber_code'>): string | null {
+  if (!input.project_id.trim()) return 'project_id_required'
+  if (!input.full_name.trim()) return 'subscriber_name_required'
+  if (!input.subscriber_code.trim()) return 'subscriber_code_required'
+  return null
+}
+
 const requireUserId = async () => {
   const { data, error } = await supabase.auth.getUser()
   if (error) throw error
@@ -59,11 +66,14 @@ export const mizanService = {
   },
 
   async createSubscriber(input: Pick<Subscriber, 'project_id' | 'full_name' | 'phone' | 'subscriber_code'>) {
+    const validationError = validateSubscriberInput(input)
+    if (validationError) throw new Error(validationError)
+
     const { data, error } = await supabase.rpc('mizan_register_subscriber', {
       p_project_id: input.project_id,
-      p_customer_reference: input.subscriber_code,
-      p_full_name: input.full_name,
-      p_phone: input.phone ?? null,
+      p_customer_reference: input.subscriber_code.trim(),
+      p_full_name: input.full_name.trim(),
+      p_phone: input.phone?.trim() || null,
       p_service_area_id: null,
     })
     if (error) throw error
