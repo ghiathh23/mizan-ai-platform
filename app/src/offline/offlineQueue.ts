@@ -1,3 +1,5 @@
+import type { OfflineOperation, SyncStatus } from './syncTypes'
+
 const DB_NAME = 'mizan-ai-offline'
 const DB_VERSION = 2
 const STORE_NAME = 'operations'
