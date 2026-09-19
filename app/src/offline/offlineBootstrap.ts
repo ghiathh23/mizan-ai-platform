@@ -4,7 +4,7 @@ import { syncPendingEvidence } from './offlineEvidenceSync'
 
 let syncing = false
 
-export async function runOfflineSync(): Promise<void> {
+async function performOfflineSync(): Promise<void> {
   if (syncing || !navigator.onLine) return
   syncing = true
   try {
@@ -15,6 +15,22 @@ export async function runOfflineSync(): Promise<void> {
   } finally {
     syncing = false
   }
+}
+
+export async function runOfflineSync(): Promise<void> {
+  if (!navigator.onLine) return
+
+  // Web Locks coordinates sync across tabs in browsers that support it.
+  // The in-memory guard remains the fallback for older browsers and same-tab overlap.
+  if ('locks' in navigator && navigator.locks) {
+    await navigator.locks.request('mizan-offline-sync', { ifAvailable: true }, async (lock) => {
+      if (!lock) return
+      await performOfflineSync()
+    })
+    return
+  }
+
+  await performOfflineSync()
 }
 
 export function registerOfflineSync(): () => void {
