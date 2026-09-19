@@ -15,7 +15,9 @@ export interface OfflineOperation<TPayload = unknown> {
 }
 
 export function isRetryableSyncStatus(status: SyncStatus): boolean {
-  return status === 'queued' || status === 'retryable_error'
+  // `syncing` is recoverable after a tab crash, power loss, or abrupt shutdown.
+  // The server-side operation_id remains the idempotency boundary.
+  return status === 'queued' || status === 'syncing' || status === 'retryable_error'
 }
 
 export function createOperationId(prefix = 'op'): string {
