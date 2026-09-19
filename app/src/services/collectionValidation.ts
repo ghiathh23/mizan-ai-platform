@@ -1,4 +1,4 @@
-import type { CollectionInput, CollectionPaymentMethod } from './collectionService'
+import type { CollectionInput, CollectionPaymentMethod } from './collectionTypes'
 
 export const COLLECTION_PAYMENT_METHODS: readonly CollectionPaymentMethod[] = [
   'cash',
